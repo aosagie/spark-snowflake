@@ -20,7 +20,7 @@ import net.snowflake.spark.snowflake.io.SupportedFormat.SupportedFormat
 import net.snowflake.spark.snowflake.io.SupportedSource.SupportedSource
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{SQLContext, SaveMode}
+import org.apache.spark.sql.{Row, SQLContext, SaveMode}
 
 /**
   * Interface to IO component
@@ -35,7 +35,7 @@ package object io {
                params: MergedParameters,
                statement: SnowflakeSQLStatement,
                format: SupportedFormat = SupportedFormat.CSV
-             ): RDD[String] =
+             ): RDD[Row] =
     StageReader.readFromStage(sqlContext,params,statement,format)
 
 

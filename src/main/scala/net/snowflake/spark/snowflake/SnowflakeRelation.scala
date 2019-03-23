@@ -30,9 +30,11 @@ import net.snowflake.spark.snowflake.io.SupportedFormat.SupportedFormat
 import net.snowflake.spark.snowflake.io.{SupportedFormat, SupportedSource}
 import net.snowflake.spark.snowflake.io.SupportedSource.SupportedSource
 import net.snowflake.spark.snowflake.DefaultJDBCWrapper.DataBaseOperations
+import org.apache.spark.sql.catalyst.InternalRow
+
 import scala.reflect.ClassTag
 
-/** Data Source API implementation for Amazon Snowflake database tables */
+/** Data Source API implementation for Snowflake database tables */
 private[snowflake] case class SnowflakeRelation(
                                                  jdbcWrapper: JDBCWrapper,
                                                  params: MergedParameters,
@@ -140,19 +142,14 @@ private[snowflake] case class SnowflakeRelation(
                                    statement: SnowflakeSQLStatement,
                                    resultSchema: StructType
                                  ): RDD[T] = {
+    //TODO: if an option was passed then use Parquet no matter what
     val format: SupportedFormat =
       if (Utils.containVariant(resultSchema)) SupportedFormat.JSON
       else SupportedFormat.CSV
 
-    val rdd: RDD[String] = io.readRDD(sqlContext, params, statement, format)
+    val rdd = io.readRDD(sqlContext, params, statement, format)
 
-    format match {
-      case SupportedFormat.CSV =>
-        rdd.mapPartitions(CSVConverter.convert[T](_, resultSchema))
-      case SupportedFormat.JSON =>
-        rdd.mapPartitions(JsonConverter.convert[T](_, resultSchema))
-    }
-
+    (if (Conversions.isInternalRow[T]()) rdd.map(row => InternalRow.fromSeq(row.toSeq)) else rdd).asInstanceOf
   }
 
   // Build a query out of required columns and filters. (Used by buildScan)

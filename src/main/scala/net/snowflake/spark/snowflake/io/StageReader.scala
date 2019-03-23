@@ -9,7 +9,9 @@ import net.snowflake.spark.snowflake._
 import net.snowflake.spark.snowflake.io.SupportedFormat.SupportedFormat
 import net.snowflake.spark.snowflake.DefaultJDBCWrapper.DataBaseOperations
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.util.Random
@@ -25,9 +27,9 @@ private[io] object StageReader {
                      params: MergedParameters,
                      statement: SnowflakeSQLStatement,
                      format: SupportedFormat
-                   ): RDD[String] = {
+                   ): RDD[Row] = {
     val conn = DefaultJDBCWrapper.getConnector(params)
-    val (storage, stage) =
+    val (storage, stage, url) = //TODO: separate stage creation from storage client creation and only use stage creation here
       CloudStorageOperations.createStorageClient(params, conn)
     val compress = params.sfCompress
     val compressFormat = if (params.sfCompress) "gzip" else "none"
@@ -41,10 +43,7 @@ private[io] object StageReader {
     val res = buildUnloadStatement(
       params,
       statement,
-      s"@$stage/$prefix/",
-      compressFormat,
-      format).execute(params.bindVariableEnabled)(conn)
-
+      s"@$stage/$prefix/").execute(params.bindVariableEnabled)(conn)
 
     // Verify it's the expected format
     val sch = res.getMetaData
@@ -65,63 +64,39 @@ private[io] object StageReader {
 
     SnowflakeTelemetry.send(conn.getTelemetry)
 
-    storage.download(
-      sqlContext.sparkContext,
-      format,
-      compress,
-      prefix
-    )
-  }
+//    storage.download(
+//      sqlContext.sparkContext,
+//      format,
+//      compress,
+//      prefix
+//    )
 
+    println("*"*20)
+    println(s"@$stage/$prefix/")
+    println(url)
+    println(params.parameters)
+    println("*"*20)
+
+    val sparkSession = sqlContext.sparkSession
+    val baseRelation = DataSource.apply(
+      sparkSession,
+      className = classOf[ParquetFileFormat].getName,
+      paths = List(url)
+    ).resolveRelation(checkFilesExist = true)
+
+    sparkSession.baseRelationToDataFrame(baseRelation).rdd
+  }
 
   private def buildUnloadStatement(
                                     params: MergedParameters,
                                     statement: SnowflakeSQLStatement,
-                                    location: String,
-                                    compression: String,
-                                    format: SupportedFormat = SupportedFormat.CSV
+                                    location: String
                                   ): SnowflakeSQLStatement = {
-
-
     // Save the last SELECT so it can be inspected
     Utils.setLastCopyUnload(statement.toString)
 
-    val (formatStmt, queryStmt): (SnowflakeSQLStatement, SnowflakeSQLStatement) =
-      format match {
-        case SupportedFormat.CSV =>
-          (
-            ConstantString(
-              s"""
-                 |FILE_FORMAT = (
-                 |    TYPE=CSV
-                 |    COMPRESSION='$compression'
-                 |    FIELD_DELIMITER='|'
-                 |    FIELD_OPTIONALLY_ENCLOSED_BY='"'
-                 |    ESCAPE_UNENCLOSED_FIELD = none
-                 |    NULL_IF= ()
-                 |  )
-                 |  """.stripMargin
-            ) !,
-            ConstantString("FROM (") + statement + ")"
-          )
-        case SupportedFormat.JSON =>
-          (
-            ConstantString(
-              s"""
-                 |FILE_FORMAT = (
-                 |    TYPE=JSON
-                 |    COMPRESSION='$compression'
-                 |)
-                 |""".stripMargin
-            ) !,
-            ConstantString("FROM (SELECT object_construct(*) FROM (") + statement + "))"
-          )
-      }
-
-    ConstantString(s"COPY INTO '$location'") + queryStmt +
-      formatStmt + "MAX_FILE_SIZE = " + params.s3maxfilesize
-
-
+    ConstantString(s"COPY INTO '$location' FROM ($statement)") +
+      s"FILE_FORMAT=(TYPE=PARQUET) MAX_FILE_SIZE=${params.s3maxfilesize}"
   }
 
   private def sendEgressUsage(bytes: Long, conn: Connection): Unit = {
@@ -131,9 +106,7 @@ private[io] object StageReader {
     SnowflakeTelemetry.addLog((TelemetryTypes.SPARK_EGRESS, metric), System.currentTimeMillis())
     SnowflakeTelemetry.send(conn.getTelemetry)
 
-    logger.debug(s"Data Egress Usage: $bytes bytes".stripMargin
-    )
-
+    logger.debug(s"Data Egress Usage: $bytes bytes")
   }
 
 }

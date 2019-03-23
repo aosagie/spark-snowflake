@@ -49,8 +49,10 @@ lazy val root = project.withId("spark-snowflake").in(file("."))
       //"org.apache.spark" %% "spark-sql-kafka-0-10" % "2.4.0", for Spark Streaming from Kafka test only
       "org.apache.spark" %% "spark-core" % testSparkVersion % "provided, test",
       "org.apache.spark" %% "spark-sql" % testSparkVersion % "provided, test",
-      "org.apache.spark" %% "spark-hive" % testSparkVersion % "provided, test"
-    ),
+      "org.apache.spark" %% "spark-hive" % testSparkVersion % "provided, test",
+      "com.amazonaws" % "aws-java-sdk" % "1.7.4" /*% Provided*/,
+      "org.apache.hadoop" % "hadoop-aws" % "2.7.6" /*% Provided*/
+),
 
     Test / testOptions += Tests.Argument("-oF"),
     Test / fork := true,
@@ -116,3 +118,8 @@ lazy val root = project.withId("spark-snowflake").in(file("."))
 //    )
 //  )
 //)
+
+assembly / assemblyMergeStrategy := {
+  case "mozilla/public-suffix-list.txt" => MergeStrategy.first
+  case filename => (assembly / assemblyMergeStrategy).value.apply(filename) //Use the previous strategy on all other files
+}

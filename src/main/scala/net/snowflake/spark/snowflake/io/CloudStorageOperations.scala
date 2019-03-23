@@ -234,7 +234,7 @@ object CloudStorageOperations {
                            conn: Connection,
                            tempStage: Boolean = true,
                            stage: Option[String] = None
-                         ): (CloudStorage, String) = {
+                         ): (CloudStorage, String, String) = {
     val azure_url = "wasbs?://([^@]+)@([^\\.]+)\\.([^/]+)/(.*)".r
     val s3_url = "s3[an]://([^/]+)/(.*)".r
     val stageName = stage
@@ -246,11 +246,12 @@ object CloudStorageOperations {
         require(param.azureSAS.isDefined, "missing Azure SAS")
 
         val azureSAS = param.azureSAS.get
+        val url = s"azure://$account.$endpoint/$container/$path"
 
         val sql =
           s"""
              |create or replace ${if (tempStage) "temporary" else ""} stage $stageName
-             |url = 'azure://$account.$endpoint/$container/$path'
+             |url = '$url'
              |credentials =
              |(azure_sas_token='${azureSAS}')
          """.stripMargin
@@ -264,16 +265,18 @@ object CloudStorageOperations {
           azureSAS = azureSAS,
           pref = path,
           connection = conn
-        ), stageName)
+        ), stageName, url)
 
       case s3_url(bucket, prefix) =>
         require(param.awsAccessKey.isDefined, "missing aws access key")
         require(param.awsSecretKey.isDefined, "missing aws secret key")
 
+        val url = s"s3://$bucket/$prefix'"
+
         val sql =
           s"""
              |create or replace ${if (tempStage) "temporary" else ""} stage $stageName
-             |url = 's3://$bucket/$prefix'
+             |url = '$url'
              |credentials =
              |(aws_key_id='${param.awsAccessKey.get}' aws_secret_key='${param.awsSecretKey.get}')
          """.stripMargin
@@ -286,9 +289,13 @@ object CloudStorageOperations {
           awsKey = param.awsSecretKey.get,
           pref = prefix,
           connection = conn
-        ), stageName)
+        ), stageName, url)
       case _ => // Internal Stage
-        (createStorageClientFromStage(param, conn, stageName, None, tempStage), stageName)
+        val storageClient = createStorageClientFromStage(param, conn, stageName, None, tempStage)
+        val stageInfo = storageClient.getStageInfo(false)._1
+        val url = s"s3a://${stageInfo(StorageInfo.BUCKET_NAME)}/${stageInfo(StorageInfo.PREFIX)}" //TODO: are internal stages always s3? How about azure internal stages?
+
+        (storageClient, stageName, url)
     }
   }
 
@@ -381,7 +388,7 @@ sealed trait CloudStorage {
 
   protected val connection: Connection
 
-  protected def getStageInfo(
+  def getStageInfo(
                               isWrite: Boolean,
                               fileName: String = ""
                             ): (Map[String, String], List[String]) =
@@ -481,7 +488,7 @@ case class InternalAzureStorage(
                                  stageName: String,
                                  @transient override val connection: Connection
                                ) extends CloudStorage {
-  override protected def getStageInfo(
+  override def getStageInfo(
                                        isWrite: Boolean,
                                        fileName: String = ""
                                      ): (Map[String, String], List[String]) = {
@@ -726,7 +733,7 @@ case class InternalS3Storage(
                               parallelism: Int = CloudStorageOperations.DEFAULT_PARALLELISM
                             ) extends CloudStorage {
 
-  override protected def getStageInfo(
+  override def getStageInfo(
                                        isWrite: Boolean,
                                        fileName: String = ""
                                      ): (Map[String, String], List[String]) = {
