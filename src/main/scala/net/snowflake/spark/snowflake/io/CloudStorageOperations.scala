@@ -293,7 +293,8 @@ object CloudStorageOperations {
       case _ => // Internal Stage
         val storageClient = createStorageClientFromStage(param, conn, stageName, None, tempStage)
         val stageInfo = storageClient.getStageInfo(false)._1
-        val url = s"s3a://${stageInfo(StorageInfo.BUCKET_NAME)}/${stageInfo(StorageInfo.PREFIX)}" //TODO: are internal stages always s3? How about azure internal stages?
+        //TODO: deal with azure too
+        val url = s"s3a://${stageInfo(StorageInfo.BUCKET_NAME)}/${stageInfo(StorageInfo.PREFIX)}"
 
         (storageClient, stageName, url)
     }
@@ -456,17 +457,6 @@ sealed trait CloudStorage {
 
   def download(fileName: String, compress: Boolean): InputStream =
     createDownloadStream(fileName, compress, getStageInfo(false, fileName)._1)
-
-
-  def download(
-                sc: SparkContext,
-                format: SupportedFormat = SupportedFormat.CSV,
-                compress: Boolean = true,
-                subDir: String = ""
-              ): RDD[String] = {
-    val (stageInfo, fileList) = getStageInfo(false)
-    new SnowflakeRDD(sc, fileList, format, createDownloadStream(_, compress, stageInfo))
-  }
 
 
   protected def createDownloadStream(
@@ -702,14 +692,6 @@ case class ExternalAzureStorage(
 
     if (compress) new GZIPInputStream(inputStream) else inputStream
 
-  }
-
-  override def download(
-                         sc: SparkContext,
-                         format: SupportedFormat,
-                         compress: Boolean,
-                         subDir: String): RDD[String] = {
-    new SnowflakeRDD(sc, getFileNames(subDir), format, createDownloadStream(_, compress, Map.empty[String, String]))
   }
 
   private def getFileNames(subDir: String): List[String] = {
@@ -965,14 +947,6 @@ case class ExternalS3Storage(
     val inputStream: InputStream = dataObject.getObjectContent
     if (compress) new GZIPInputStream(inputStream) else inputStream
   }
-
-  override def download(
-                         sc: SparkContext,
-                         format: SupportedFormat,
-                         compress: Boolean,
-                         subDir: String
-                       ): RDD[String] =
-    new SnowflakeRDD(sc, getFileNames(subDir), format, createDownloadStream(_, compress, Map.empty[String, String]))
 
 
   private def getFileNames(subDir: String): List[String] =

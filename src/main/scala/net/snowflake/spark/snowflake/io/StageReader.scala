@@ -25,8 +25,7 @@ private[io] object StageReader {
   def readFromStage(
                      sqlContext: SQLContext,
                      params: MergedParameters,
-                     statement: SnowflakeSQLStatement,
-                     format: SupportedFormat
+                     statement: SnowflakeSQLStatement
                    ): RDD[Row] = {
     val conn = DefaultJDBCWrapper.getConnector(params)
     val (storage, stage, url) = //TODO: separate stage creation from storage client creation and only use stage creation here
@@ -78,11 +77,8 @@ private[io] object StageReader {
     println("*"*20)
 
     val sparkSession = sqlContext.sparkSession
-    val baseRelation = DataSource.apply(
-      sparkSession,
-      className = classOf[ParquetFileFormat].getName,
-      paths = List(url)
-    ).resolveRelation(checkFilesExist = true)
+    val baseRelation = DataSource(sparkSession, className = classOf[ParquetFileFormat].getName,
+      paths = List(url)).resolveRelation()
 
     sparkSession.baseRelationToDataFrame(baseRelation).rdd
   }

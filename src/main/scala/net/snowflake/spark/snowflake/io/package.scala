@@ -33,10 +33,9 @@ package object io {
   def readRDD(
                sqlContext: SQLContext,
                params: MergedParameters,
-               statement: SnowflakeSQLStatement,
-               format: SupportedFormat = SupportedFormat.CSV
+               statement: SnowflakeSQLStatement
              ): RDD[Row] =
-    StageReader.readFromStage(sqlContext,params,statement,format)
+    StageReader.readFromStage(sqlContext,params,statement)
 
 
   /**
