@@ -271,7 +271,7 @@ object CloudStorageOperations {
         require(param.awsAccessKey.isDefined, "missing aws access key")
         require(param.awsSecretKey.isDefined, "missing aws secret key")
 
-        val url = s"s3://$bucket/$prefix'"
+        val url = s"s3://$bucket/$prefix"
 
         val sql =
           s"""
@@ -290,6 +290,7 @@ object CloudStorageOperations {
           pref = prefix,
           connection = conn
         ), stageName, url)
+
       case _ => // Internal Stage
         val storageClient = createStorageClientFromStage(param, conn, stageName, None, tempStage)
         val stageInfo = storageClient.getStageInfo(false)._1
