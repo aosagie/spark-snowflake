@@ -37,7 +37,7 @@ import net.snowflake.client.jdbc.internal.microsoft.azure.storage.{StorageCreden
 import net.snowflake.client.jdbc.internal.microsoft.azure.storage.blob.CloudBlobClient
 import net.snowflake.client.jdbc.internal.microsoft.azure.storage.file.CloudFileDirectory
 import net.snowflake.client.jdbc.internal.snowflake.common.core.SqlState
-import net.snowflake.spark.snowflake.DefaultJDBCWrapper
+import net.snowflake.spark.snowflake.{CloudCredentialsUtils, DefaultJDBCWrapper, Parameters}
 import net.snowflake.spark.snowflake.Parameters.MergedParameters
 import net.snowflake.spark.snowflake.io.SupportedFormat.SupportedFormat
 import net.snowflake.spark.snowflake.DefaultJDBCWrapper.DataBaseOperations
@@ -268,17 +268,17 @@ object CloudStorageOperations {
         ), stageName, url)
 
       case s3_url(bucket, prefix) =>
-        require(param.awsAccessKey.isDefined, "missing aws access key")
-        require(param.awsSecretKey.isDefined, "missing aws secret key")
+        val awsCredentials = param.awsCredentials.orElse(param.temporaryAWSCredentials)
+        require(awsCredentials.isDefined, "missing aws credentials")
 
+        val credentials = awsCredentials.map(CloudCredentialsUtils.getSnowflakeCredentialsStringForAWS).get
         val url = s"s3://$bucket/$prefix"
 
         val sql =
           s"""
              |create or replace ${if (tempStage) "temporary" else ""} stage $stageName
              |url = '$url'
-             |credentials =
-             |(aws_key_id='${param.awsAccessKey.get}' aws_secret_key='${param.awsSecretKey.get}')
+             |$credentials
          """.stripMargin
 
         DefaultJDBCWrapper.executeQueryInterruptibly(conn, sql)

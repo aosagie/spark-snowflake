@@ -20,7 +20,7 @@ package net.snowflake.spark.snowflake
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.{KeyFactory, PrivateKey}
 
-import net.snowflake.client.jdbc.internal.amazonaws.auth.{AWSCredentials, BasicSessionCredentials}
+import net.snowflake.client.jdbc.internal.amazonaws.auth.{AWSCredentials, BasicAWSCredentials, BasicSessionCredentials}
 import net.snowflake.client.jdbc.internal.microsoft.azure.storage.StorageCredentialsSharedAccessSignature
 import net.snowflake.spark.snowflake.FSType.FSType
 import org.apache.commons.codec.binary.Base64
@@ -511,6 +511,13 @@ object Parameters {
            sessionToken    <- parameters.get(PARAM_TEMP_SESSION_TOKEN))
         yield
           new BasicSessionCredentials(accessKey, secretAccessKey, sessionToken)
+    }
+
+    def awsCredentials: Option[AWSCredentials] = {
+      for (accessKey       <- parameters.get(PARAM_AWS_ACCESS_KEY);
+           secretAccessKey <- parameters.get(PARAM_AWS_SECRET_KEY))
+        yield
+          new BasicAWSCredentials(accessKey, secretAccessKey)
     }
 
     /**
