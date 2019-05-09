@@ -52,7 +52,7 @@ lazy val root = project.withId("spark-snowflake").in(file("."))
       "org.apache.spark" %% "spark-hive" % testSparkVersion % "provided, test",
       "com.amazonaws" % "aws-java-sdk" % "1.7.4" /*% Provided*/,
       "org.apache.hadoop" % "hadoop-aws" % "2.7.6" /*% Provided*/
-),
+    ),
 
     Test / testOptions += Tests.Argument("-oF"),
     Test / fork := true,
@@ -121,5 +121,5 @@ lazy val root = project.withId("spark-snowflake").in(file("."))
 
 assembly / assemblyMergeStrategy := {
   case "mozilla/public-suffix-list.txt" => MergeStrategy.first
-  case filename => (assembly / assemblyMergeStrategy).value.apply(filename) //Use the previous strategy on all other files
+  case filename => MergeStrategy.defaultMergeStrategy(filename)
 }

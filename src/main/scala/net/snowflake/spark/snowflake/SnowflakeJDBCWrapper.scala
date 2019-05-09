@@ -38,6 +38,8 @@ import net.snowflake.spark.snowflake.Parameters.MergedParameters
 import net.snowflake.spark.snowflake.Utils.JDBC_DRIVER
 import DefaultJDBCWrapper.DataBaseOperations
 
+import scala.util.control.NonFatal
+
 /**
   * Shim which exposes some JDBC helper functions. Most of this code is copied from Spark SQL, with
   * minor modifications for Snowflake-specific features and limitations.
@@ -304,6 +306,8 @@ private[snowflake] class JDBCWrapper {
             log.error("Exception occurred while cancelling query", s)
             throw e
         }
+      case NonFatal(e) => //Re-throw exception to get full stack-trace from this thread and the future's thread
+        throw new RuntimeException(e)
     }
   }
 

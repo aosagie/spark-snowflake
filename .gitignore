@@ -9,3 +9,5 @@ metastore_db/*
 *.log
 check/
 snowflake.travis.json
+.bloop/
+.metals/
